@@ -1,0 +1,6 @@
+playwright
+beautifulsoup4
+deepdiff
+apscheduler
+requests
+python-dotenv
