@@ -4,3 +4,4 @@ deepdiff
 apscheduler
 requests
 python-dotenv
+apscheduler

@@ -1,0 +1,4 @@
+TARGET_URLS = [
+    "https://en.wikipedia.org/wiki/Artificial_intelligence",
+    "https://en.wikipedia.org/wiki/Machine_learning",
+]

@@ -1,4 +1,3 @@
-# agents/cleaner.py
 from bs4 import BeautifulSoup
 
 def clean_html(html):
