@@ -1,5 +1,3 @@
-# agents/comparator.py
-# agents/comparator.py
 from deepdiff import DeepDiff
 
 def compare_snapshots(old_text, new_text, min_change_size=200):
@@ -15,7 +13,7 @@ def compare_snapshots(old_text, new_text, min_change_size=200):
     change_size = abs(len(new_text) - len(old_text))
 
     if change_size < min_change_size:
-        return None  # ignore tiny changes
+        return None
 
     return diff
 
