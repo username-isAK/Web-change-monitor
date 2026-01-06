@@ -2,7 +2,7 @@ from agents.fetcher import fetch_html
 from agents.cleaner import clean_html
 from agents.comparator import compare_snapshots
 from utils.logger import log
-from db.repository import get_last_snapshot, store_snapshot
+from db.repository import get_last_snapshot, store_snapshot, store_ai_analysis
 from agents.extractor import extract_changes
 from agents.llm_analyzer import analyze_changes
 
@@ -20,9 +20,13 @@ def monitor_url(url):
             changes = extract_changes(diff)
 
             if changes:
-                analysis = analyze_changes(changes, url)
-                log("🔍 AI Analysis:")
-                print(analysis)
+                try:
+                    analysis = analyze_changes(changes, url)
+                    store_ai_analysis(url, analysis)
+                    log("🔍 AI Analysis:")
+                    print(analysis)
+                except Exception as e:
+                    log(f"LLM analysis failed: {e}")
         else:
             log("No meaningful change detected.")
     else:
