@@ -5,3 +5,5 @@ apscheduler
 requests
 python-dotenv
 apscheduler
+lxml
+fastapi
