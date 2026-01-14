@@ -3,48 +3,175 @@ from datetime import datetime
 import sqlite3
 import json
 
-# Absolute path relative to this file
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "web_monitor.db"
 
-def store_snapshot(url, content):
+def init_users_table():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     c.execute("""
-        CREATE TABLE IF NOT EXISTS snapshots (
-            id INTEGER PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+def init_urls_table():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS monitored_urls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            url TEXT,
+            active INTEGER DEFAULT 1,
+            created_at TEXT,
+            UNIQUE(user_id, url),
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+def get_or_create_user(email: str) -> int:
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("SELECT id FROM users WHERE email = ?", (email,))
+    row = c.fetchone()
+
+    if row:
+        user_id = row[0]
+    else:
+        c.execute("INSERT INTO users (email) VALUES (?)", (email,))
+        user_id = c.lastrowid
+
+    conn.commit()
+    conn.close()
+    return user_id
+
+
+
+def add_url(user_id: int, url: str):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""
+        INSERT OR IGNORE INTO monitored_urls (user_id, url, active, created_at)
+        VALUES (?, ?, 1, ?)
+    """, (user_id, url, datetime.now().isoformat()))
+
+    conn.commit()
+
+    c.execute("""
+        SELECT id FROM monitored_urls
+        WHERE user_id = ? AND url = ?
+    """, (user_id, url))
+
+    row = c.fetchone()
+    conn.close()
+
+    return row[0]
+
+
+def get_all_active_urls():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""
+        SELECT id, user_id, url
+        FROM monitored_urls
+        WHERE active = 1
+    """)
+
+    rows = [
+        {"id": r[0], "user_id": r[1], "url": r[2]}
+        for r in c.fetchall()
+    ]
+
+    conn.close()
+    return rows
+
+def get_active_urls_for_user(user_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""
+        SELECT id, url
+        FROM monitored_urls
+        WHERE user_id = ? AND active = 1
+    """, (user_id,))
+
+    rows = [{"id": r[0], "url": r[1]} for r in c.fetchall()]
+
+    conn.close()
+    return rows
+
+
+
+def delete_url(user_id: int, url_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    # Delete snapshots for this URL
+    c.execute("""
+        DELETE FROM snapshots
+        WHERE url IN (
+            SELECT url FROM monitored_urls
+            WHERE id = ? AND user_id = ?
+        )
+    """, (url_id, user_id))
+
+    # Delete AI analysis for this URL
+    c.execute("""
+        DELETE FROM ai_analysis
+        WHERE url IN (
+            SELECT url FROM monitored_urls
+            WHERE id = ? AND user_id = ?
+        )
+    """, (url_id, user_id))
+
+    # Delete the URL itself
+    c.execute("""
+        DELETE FROM monitored_urls
+        WHERE id = ? AND user_id = ?
+    """, (url_id, user_id))
+
+    conn.commit()
+    conn.close()
+
+
+def init_snapshots_table():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS snapshots(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
             url TEXT,
             timestamp TEXT,
             content TEXT
         )
     """)
 
-    c.execute(
-        "INSERT INTO snapshots (url, timestamp, content) VALUES (?, ?, ?)",
-        (url, datetime.now().isoformat(), content)
-    )
-
     conn.commit()
     conn.close()
 
-def get_last_snapshot(url):
+def init_ai_analysis_table():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute(
-        "SELECT content FROM snapshots WHERE url = ? ORDER BY id DESC LIMIT 1",
-        (url,)
-    )
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else None
 
-def store_ai_analysis(url, analysis):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
     c.execute("""
-        CREATE TABLE IF NOT EXISTS ai_analysis (
-            id INTEGER PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS ai_analysis(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
             url TEXT,
             timestamp TEXT,
             summary TEXT,
@@ -52,25 +179,73 @@ def store_ai_analysis(url, analysis):
             reasoning TEXT
         )
     """)
-    c.execute(
-        "INSERT INTO ai_analysis (url, timestamp, summary, importance, reasoning) VALUES (?, ?, ?, ?, ?)",
-        (
-            url,
-            datetime.now().isoformat(),
-            json.dumps(analysis.get("summary")),
-            analysis.get("importance"),
-            analysis.get("reasoning"),
-        )
-    )
+
     conn.commit()
     conn.close()
 
-def get_last_analysis(url):
+def store_snapshot(user_id: int, url: str, content: str):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute(
+        """
+        INSERT INTO snapshots (user_id, url, timestamp, content)
+        VALUES (?, ?, ?, ?)
+        """,
+        (user_id, url, datetime.now().isoformat(), content)
+    )
+
+    conn.commit()
+    conn.close()
+
+def get_last_snapshot(user_id: int, url: str):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute(
+        """
+        SELECT content
+        FROM snapshots
+        WHERE user_id = ? AND url = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (user_id, url)
+    )
+
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def store_ai_analysis(user_id: int, url: str, analysis: dict):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    summary_json = json.dumps(analysis.get("summary", []))
+    importance = analysis.get("importance", "UNKNOWN")
+    reasoning = analysis.get("reasoning", "")
+
+    c.execute(
+        """
+        INSERT INTO ai_analysis
+        (user_id, url, timestamp, summary, importance, reasoning)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (user_id, url, datetime.now().isoformat(),
+         summary_json, importance, reasoning)
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def get_last_analysis(user_id: int, url: str):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute(
-        "SELECT summary, importance, reasoning FROM ai_analysis WHERE url = ? ORDER BY id DESC LIMIT 1",
-        (url,)
+        "SELECT summary, importance, reasoning FROM ai_analysis WHERE user_id = ? AND url = ? ORDER BY id DESC LIMIT 1",
+        (user_id,url)
     )
     row = c.fetchone()
     conn.close()
@@ -82,4 +257,36 @@ def get_last_analysis(url):
             "reasoning": reasoning
         }
     return None
+
+def get_latest_summaries_for_user(user_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    # Get latest analysis per URL for this user
+    c.execute("""
+        SELECT a.url, a.summary, a.importance, a.reasoning
+        FROM ai_analysis a
+        JOIN (
+            SELECT url, MAX(id) AS max_id
+            FROM ai_analysis
+            WHERE user_id = ?
+            GROUP BY url
+        ) latest
+        ON a.url = latest.url AND a.id = latest.max_id
+        WHERE a.user_id = ?
+    """, (user_id, user_id))
+
+    rows = c.fetchall()
+    conn.close()
+
+    results = []
+    for url, summary, importance, reasoning in rows:
+        results.append({
+            "url": url,
+            "summary": json.loads(summary),
+            "importance": importance,
+            "reasoning": reasoning
+        })
+
+    return results
 

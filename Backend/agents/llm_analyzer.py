@@ -37,6 +37,15 @@ Keys: summary, importance, reasoning
 
     match = re.search(r"\{.*\}", raw, re.DOTALL)
     if not match:
-        raise ValueError("LLM did not return valid JSON")
+        return {
+            "summary": [],
+            "importance": "ERROR",
+            "reasoning": "LLM did not return valid JSON"
+        }
 
-    return json.loads(match.group())
+    result = json.loads(match.group())
+    return {
+        "summary": result.get("summary", []),
+        "importance": result.get("importance", "UNKNOWN"),
+        "reasoning": result.get("reasoning", "")
+    }
