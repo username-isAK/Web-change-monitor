@@ -290,3 +290,80 @@ def get_latest_summaries_for_user(user_id: int):
 
     return results
 
+def init_notifications_table():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            url TEXT,
+            message TEXT,
+            importance TEXT,
+            created_at TEXT,
+            read INTEGER DEFAULT 0
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+def create_notification(user_id: int, url: str, message: str, importance: str):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""
+        INSERT INTO notifications (user_id, url, message, importance, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        user_id,
+        url,
+        message,
+        importance,
+        datetime.now().isoformat()
+    ))
+
+    conn.commit()
+    conn.close()
+
+def get_notifications_for_user(user_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""
+        SELECT id, url, message, importance, created_at, read
+        FROM notifications
+        WHERE user_id = ?
+        ORDER BY id DESC
+    """, (user_id,))
+
+    rows = c.fetchall()
+    conn.close()
+
+    return [
+        {
+            "id": r[0],
+            "url": r[1],
+            "message": r[2],
+            "importance": r[3],
+            "created_at": r[4],
+            "read": bool(r[5])
+        }
+        for r in rows
+    ]
+
+def mark_notification_read(user_id: int, notification_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""
+        UPDATE notifications
+        SET read = 1
+        WHERE id = ? AND user_id = ?
+    """, (notification_id, user_id))
+
+    conn.commit()
+    conn.close()
+
+

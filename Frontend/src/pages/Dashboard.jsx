@@ -4,9 +4,11 @@ import axios from "axios";
 
 export default function App() {
   const [urlsInput, setUrlsInput] = useState("");
-  const [urls, setUrls] = useState([]); // All registered URLs
-  const [results, setResults] = useState([]); // Summaries
+  const [urls, setUrls] = useState([]);
+  const [results, setResults] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
+
   const userEmail = "user@example.com";
   const API_BASE = "/api";
 
@@ -18,6 +20,41 @@ export default function App() {
       setUrls(res.data);
     } catch (err) {
       console.error("Failed to fetch URLs:", err);
+    }
+  };
+
+  const fetchSummaries = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/summaries`, {
+        headers: { "user-email": userEmail },
+      });
+      setResults(res.data ?? []);
+    } catch (err) {
+      console.error("Failed to fetch summaries:", err);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/notifications`, {
+        headers: { "user-email": userEmail },
+      });
+      setNotifications(res.data);
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err);
+    }
+  };
+
+  const markNotificationRead = async (id) => {
+    try {
+      await axios.post(
+        `${API_BASE}/notifications/${id}/read`,
+        {},
+        { headers: { "user-email": userEmail } }
+      );
+      fetchNotifications();
+    } catch (err) {
+      console.error("Failed to mark notification read:", err);
     }
   };
 
@@ -61,30 +98,55 @@ export default function App() {
     }
   };
 
-  const fetchSummaries = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/summaries`, {
-        headers: { "user-email": userEmail },
-      });
-      setResults(res.data.results ?? []);
-    } catch (err) {
-      console.error("Failed to fetch summaries:", err);
-    }
-  };
 
   useEffect(() => {
     fetchUrls();
     fetchSummaries();
+    fetchNotifications();
+
     const interval = setInterval(() => {
-      fetchSummaries();
       fetchUrls();
-    }, 30000); // refresh every 30s
+      fetchSummaries();
+      fetchNotifications();
+    }, 30000);
+
     return () => clearInterval(interval);
   }, []);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <div style={{ padding: "20px" }}>
       <h2>Web Change Monitor</h2>
+
+      <div style={{ marginBottom: "20px" }}>
+        <h3>
+          Notifications{" "}
+          {unreadCount > 0 && (
+            <span style={{ color: "red" }}>({unreadCount})</span>
+          )}
+        </h3>
+
+        {notifications.length === 0 && <p>No notifications yet.</p>}
+
+        {notifications.map((n) => (
+          <div
+            key={n.id}
+            onClick={() => markNotificationRead(n.id)}
+            style={{
+              border: "1px solid #ddd",
+              padding: "10px",
+              marginBottom: "8px",
+              backgroundColor: n.read ? "#f9f9f9" : "#fff3cd",
+              cursor: "pointer",
+            }}
+          >
+            <strong>{n.importance.toUpperCase()}</strong>
+            <p>{n.message}</p>
+            <small>{n.url}</small>
+          </div>
+        ))}
+      </div>
 
       <div style={{ marginBottom: "20px" }}>
         <h3>Register new URLs</h3>
@@ -110,35 +172,20 @@ export default function App() {
               marginBottom: "12px",
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "center",
             }}
           >
             <span>{u.url}</span>
-            <div>
-              <span
-                style={{
-                  color: "white",
-                  backgroundColor: "green",
-                  padding: "2px 6px",
-                  borderRadius: "4px",
-                  marginRight: "8px",
-                  fontSize: "12px",
-                }}
-              >
-                Monitoring
-              </span>
-              <button onClick={() => handleDelete(u.id)}>Stop</button>
-            </div>
+            <button onClick={() => handleDelete(u.id)}>Delete</button>
           </div>
         ))}
       </div>
 
-      <div style={{ marginTop: "20px" }}>
+      <div>
         <h3>Summaries</h3>
         {loading && <p>Loading summaries...</p>}
-        {results.map((r, idx) => (
+        {results.map((r) => (
           <UrlCard
-            key={idx}
+            key={r.url}
             url={r.url}
             summary={r.summary}
             importance={r.importance}

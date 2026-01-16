@@ -14,7 +14,7 @@ from Backend.db.repository import (
     init_ai_analysis_table,
     get_latest_summaries_for_user,
     get_active_urls_for_user,
-    delete_url
+    delete_url, init_notifications_table, get_notifications_for_user, mark_notification_read
 )
 from Backend.scheduler import start_scheduler, add_url_job, remove_url_job
 
@@ -44,6 +44,8 @@ async def startup_event():
     init_ai_analysis_table()
     start_scheduler()
     urls = get_all_active_urls()
+    init_notifications_table()
+
     for item in urls:
         add_url_job(item["user_id"], item["id"], item["url"])
     print("Startup complete!")
@@ -87,7 +89,7 @@ async def list_urls(user_email: str = Header(..., alias="user-email")):
 async def remove_url(url_id: int, user_email: str = Header(..., alias="user-email")):
     user_id = get_or_create_user(user_email)
     delete_url(user_id, url_id)
-    remove_url_job(url_id)
+    remove_url_job(user_id, url_id)
 
     return {"message": "URL and all related data deleted, monitoring stopped"}
 
@@ -112,6 +114,23 @@ async def get_summary(url: str):
     except Exception as e:
         print(f">>> ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/notifications")
+async def get_notifications(
+    user_email: str = Header(..., alias="user-email")
+):
+    user_id = get_or_create_user(user_email)
+    return get_notifications_for_user(user_id)
+
+@app.post("/notifications/{notification_id}/read")
+async def mark_notification(
+    notification_id: int,
+    user_email: str = Header(..., alias="user-email")
+):
+    user_id = get_or_create_user(user_email)
+    mark_notification_read(user_id, notification_id)
+    return {"message": "Notification marked as read"}
+
 
 
 if __name__ == "__main__":
