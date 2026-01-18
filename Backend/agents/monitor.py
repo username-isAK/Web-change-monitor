@@ -6,7 +6,7 @@ from Backend.db.repository import (
     get_last_snapshot,
     store_snapshot,
     store_ai_analysis,
-    create_notification
+    create_notification, update_last_checked
 )
 from Backend.agents.extractor import extract_changes
 from Backend.agents.llm_analyzer import analyze_changes
@@ -18,6 +18,7 @@ def monitor_url(user_id: int, url_id: int, url: str):
         html = fetch_html(url)
     except Exception as e:
         log(f"Failed to fetch {url}: {e}")
+        update_last_checked(user_id, url)
         return
 
     clean_text = clean_html(html)
@@ -34,21 +35,24 @@ def monitor_url(user_id: int, url_id: int, url: str):
                     analysis = analyze_changes(changes, url)
 
                     store_ai_analysis(user_id, url, analysis)
-                    summary = analysis.get("summary")
-                    message = (
-                        summary[0]
-                        if isinstance(summary, list) and summary
-                        else "Website content changed"
-                    )
+                    importance = analysis.get("importance", "medium")
 
-                    create_notification(
-                        user_id=user_id,
-                        url=url,
-                        message=message,
-                        importance=analysis.get("importance", "medium")
-                    )
+                    if importance == "high":
+                        summary = analysis.get("summary")
+                        message = (
+                            summary[0]
+                            if isinstance(summary, list) and summary
+                            else "High-impact website change detected"
+                        )
 
-                    log("🔔 Notification created")
+                        create_notification(
+                            user_id=user_id,
+                            url=url,
+                            message=message,
+                            importance=importance
+                        )
+
+                        log("🔔 High-importance notification created")
 
                 except Exception as e:
                     log(f"LLM analysis failed: {e}")
@@ -58,4 +62,5 @@ def monitor_url(user_id: int, url_id: int, url: str):
         log("First run — creating baseline snapshot.")
 
     store_snapshot(user_id, url, clean_text)
+    update_last_checked(user_id, url)
 

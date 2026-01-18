@@ -14,7 +14,7 @@ from Backend.db.repository import (
     init_ai_analysis_table,
     get_latest_summaries_for_user,
     get_active_urls_for_user,
-    delete_url, init_notifications_table, get_notifications_for_user, mark_notification_read
+    delete_url, init_notifications_table, get_notifications_for_user, delete_notification
 )
 from Backend.scheduler import start_scheduler, add_url_job, remove_url_job
 
@@ -122,15 +122,15 @@ async def get_notifications(
     user_id = get_or_create_user(user_email)
     return get_notifications_for_user(user_id)
 
-@app.post("/notifications/{notification_id}/read")
-async def mark_notification(
+
+@app.delete("/notifications/{notification_id}")
+async def delete_notification_api(
     notification_id: int,
     user_email: str = Header(..., alias="user-email")
 ):
     user_id = get_or_create_user(user_email)
-    mark_notification_read(user_id, notification_id)
-    return {"message": "Notification marked as read"}
-
+    delete_notification(user_id, notification_id)
+    return {"message": "Notification deleted"}
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ def add_url_job(user_id: int, url_id: int, url: str):
     scheduler.add_job(
         monitor_url,
         trigger="interval",
-        minutes=1,
+        minutes=10,
         args=[user_id, url_id, url],
         id=job_id,
         replace_existing=True

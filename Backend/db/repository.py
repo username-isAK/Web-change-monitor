@@ -31,10 +31,28 @@ def init_urls_table():
             url TEXT,
             active INTEGER DEFAULT 1,
             created_at TEXT,
+            last_checked_at TEXT,
             UNIQUE(user_id, url),
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
     """)
+
+    conn.commit()
+    conn.close()
+
+def update_last_checked(user_id: int, url: str):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""
+        UPDATE monitored_urls
+        SET last_checked_at = ?
+        WHERE user_id = ? AND url = ?
+    """, (
+        datetime.now().isoformat(),
+        user_id,
+        url
+    ))
 
     conn.commit()
     conn.close()
@@ -103,12 +121,12 @@ def get_active_urls_for_user(user_id: int):
     c = conn.cursor()
 
     c.execute("""
-        SELECT id, url
+        SELECT id, url, last_checked_at
         FROM monitored_urls
         WHERE user_id = ? AND active = 1
     """, (user_id,))
 
-    rows = [{"id": r[0], "url": r[1]} for r in c.fetchall()]
+    rows = [{"id": r[0], "url": r[1], "last_checked_at": r[2]} for r in c.fetchall()]
 
     conn.close()
     return rows
@@ -353,17 +371,17 @@ def get_notifications_for_user(user_id: int):
         for r in rows
     ]
 
-def mark_notification_read(user_id: int, notification_id: int):
+def delete_notification(user_id: int, notification_id: int):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     c.execute("""
-        UPDATE notifications
-        SET read = 1
+        DELETE FROM notifications
         WHERE id = ? AND user_id = ?
     """, (notification_id, user_id))
 
     conn.commit()
     conn.close()
+
 
 
